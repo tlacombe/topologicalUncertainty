@@ -8,29 +8,52 @@ import utils.utils_graphs as ug
 
 
 def dgm_per_layers_from_graphs(graphs_per_layers):
-    # Assume backend is gudhi by default.
-    # Note: we add negative wheights and then flip the diagram to implicitely perform superlevel sets persistence.
-    # Named after B.Rieck
+    '''
+    Given a list of SimplexTree (representing graphs, typically from build_graph_from_deep_model),
+    compute the corresponding persistence diagrams using superlevel set filtration (equiv. maximum spanning tree).
+
+    Note: we add negative wheights and then flip the diagram to implicitely perform superlevel sets persistence.
+    These persistence diagrams are 1-dimensional and have the same cardinality.
+
+    :param graphs_per_layers: list of gudhi simplexTree.
+    :return: list of persistence diagrams, represented as 1D numpy.array.
+    '''
+
     [G.compute_persistence(min_persistence=-1.) for G in graphs_per_layers]
-    dgms = [G.persistence_intervals_in_dimension(0) for G in graphs_per_layers]
-    dgms = [- dgm[np.where(np.isfinite(dgm[:, 1]))] for dgm in dgms]
+    dgms = [G.persistence_intervals_in_dimension(0)[:,1] for G in graphs_per_layers]
+    dgms = [- dgm[np.where(np.isfinite(dgm))] for dgm in dgms]
     return dgms
 
 
 def diags_from_graphs(graphs):
+    '''
+    :param graphs: list of list of SimplexTree (representing graphs)
+    :return: list of list of persistence diagrams
+    '''
     return [dgm_per_layers_from_graphs(gpl) for gpl in graphs]
 
 
-def wasserstein_barycenter_1D(point_clouds):
+def wasserstein_barycenter_1D(u):
     '''
     Assume N array with the same number of points K, returns the naive 1D barycenter with support of size K
     '''
-    s = np.sort(point_clouds)
+    s = np.sort(u)
     return np.mean(s, axis=0)
 
 
 def wasserstein_distance_1D(a, b, p=2., average=True):
+    '''
+    Given two sets of points with the same cardinality, compute the 1D Wasserstein distance between them.
+
+    :param a: First 1D set of points.
+    :param b: Second 1D set of points.
+    :param p: Wasserstein exponent, in [1, +np.inf].
+    :param average: if True, the Wasserstein distance is divided by the cardinality of the point clouds (normalization).
+    :return: 1D Wasserstein distance between the two sets of points.
+    '''
     n = a.shape[0]
+    assert b.shape[0] == n
+
     if np.isinf(p):
         res = np.max(np.abs(np.sort(a) - np.sort(b)))
     else:
@@ -41,13 +64,55 @@ def wasserstein_distance_1D(a, b, p=2., average=True):
         return res
 
 
-def topological_uncertainty(model, x, all_barycenters, layers_id=None, aggregation='mean', p=2., average_wasserstein=True):
+def barycenters_of_set_from_deep_model(model, x, layers_id=None):
+    '''
+    Given a model, a (sub)set of (training) observations and a subset of layers to consider, compute the corresponding
+    barycenters (one for each layer). Note that, for a given layer, the cardinality of the barycenter is the same
+    as the one of the diagrams corresponding to this layer.
+
+    :param model: a tensorflow sequential model.
+    :param x: Set of observations (usually belonging to a same class in the training set).
+    :param layers_id: layers for which we compute a barycenter. If `None`, all (fully-connected) layers are used.
+    :return: list of list of barycenters (1D numpy.array).
+    '''
+    graphs = ug.build_graphs_from_deep_model(model, x, layers_id=layers_id)
+    diags = diags_from_graphs(graphs)
+    nlayer = len(diags[0])  # number of layer (with weight matrix) that we use from our model.
+    point_clouds_per_layer = [np.array([diag[ell] for diag in diags]) for ell in range(nlayer)]
+
+    wbarys = [wasserstein_barycenter_1D(pc) for pc in point_clouds_per_layer]
+
+    return wbarys
+
+
+def topological_uncertainty(model, x, all_barycenters,
+                            layers_id=None, aggregation='mean', p=2., normalize_wasserstein=True):
+    '''
+
+    :param model: tensorflow sequential model.
+    :param x: set of observations for which we want to compute Topological Uncertainty. Must be valid entries for `model`.
+    :param all_barycenters: list of list of persistence diagrams; all_barycenter[label_id][ell] represents the
+                            barycenter corresponding to the `label_id`-th class and the `layer_id[ell]`-th layer.
+                            Typically obtained calling `barycenters_of_set_from_deep_model`.
+    :param layers_id: layers for which we compute Topological Uncertainty. Must be the same as the one used to compute
+    barycenters first.
+    :param aggregation: How TU-per-layer is aggregated. Default: `mean`, i.e. averaging through layers.
+                        If `max`,  maximum TU over layers is taken into account;
+                        If `None`, return an array representing the TU for all layers considered.
+    :param p: Wasserstein exponent used to compute distances. Default is p=2., consistent with Fréchet mean computation.
+    :param normalize_wasserstein: If True, divide the distance between diagrams by their cardinality (helps making things
+                                  comparable layer-wise).
+    :return: Topological uncertainty values for all observations. If `aggregation` is `None`, it is a
+             (nb_obs x nb_layers) numpy.array.
+             Otherwise, it is a (nb_obs) numpy.array.
+    '''
     nlayer = len(all_barycenters[0])  # number of layers used
     predicted_classes = np.argmax(model.predict(x), axis=-1)
     graphs = ug.build_graphs_from_deep_model(model, x, layers_id=layers_id)
     diags = diags_from_graphs(graphs)
 
-    res = np.array([[wasserstein_distance_1D(diags_per_layer[ell][:,1], all_barycenters[predicted_class][ell], p=p, average=average_wasserstein) for ell in range(nlayer)]
+    res = np.array([[wasserstein_distance_1D(diags_per_layer[ell], all_barycenters[predicted_class][ell],
+                                             p=p, average=normalize_wasserstein) for ell in range(nlayer)]
                      for (diags_per_layer, predicted_class) in zip(diags, predicted_classes)])
 
     if aggregation=='mean':
@@ -57,15 +122,4 @@ def topological_uncertainty(model, x, all_barycenters, layers_id=None, aggregati
     elif aggregation is None:
         return res
     else:
-        raise ValueError('aggregation=%s is not valid. Set it to mean (default) or max.')
-
-
-def bary_of_set_from_deep_model(model, x, layers_id=None):
-    graphs = ug.build_graphs_from_deep_model(model, x, layers_id=layers_id)
-    diags = diags_from_graphs(graphs)
-    nlayer = len(diags[0])  # number of layer (with weight matrix) that we use from our model.
-    point_clouds_per_layer = [np.array([diag[ell][:,1] for diag in diags]) for ell in range(nlayer)]
-
-    wbarys = [wasserstein_barycenter_1D(pc) for pc in point_clouds_per_layer]
-
-    return wbarys
+        raise ValueError('aggregation=%s is not valid. Set it to mean (default) or max.' %aggregation)

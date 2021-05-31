@@ -8,7 +8,7 @@ import gudhi as gd
 try:
     import tensorflow as tf
 except ImportError:
-    print("Cannot import tensorflow. build_graphs_from_deep_model not available.")
+    print("Cannot import tensorflow. build_graphs_from_deep_model will not be available.")
 
 
 def _matrix_and_input(x_train, W):
@@ -55,7 +55,8 @@ def _get_vertices_and_edges_values_from_input(model, x_train, layers_id=None, on
 
 def _simplex_tree_from_bipartite_matrix(W):
     '''
-    Turn a (numpy) matrix into a SimplexTree (gudhi) from which we can extract topological information.
+    Turn a (numpy) matrix representing a bipartite graph into a SimplexTree (gudhi object)
+    from which we can extract topological information.
 
     :param W: A `numpy` matrix representing a bipartite graph (W.shape[0] vertices connected to W.shape[1] vertices).
     :return: A `SimplexTree` G representing the corresponding weighted (bipartite) graph.
@@ -72,8 +73,11 @@ def _simplex_tree_from_bipartite_matrix(W):
 def build_graphs_from_adjacency_matrices(matrices):
     raise NotImplemented('Diagrams from adjacency graphs will be provided in a future version.')
 
+
 def build_graphs_from_deep_model(model, x_train, layers_id=None):
     '''
+    Given a tensorflow sequential model, a set of observations and a subset of layers to consider,
+    compute a list of list of graphs (encoded as SimplexTree) for the different layers and observations.
 
     :param model: A tensorflow (sequential) model.
     :param x_train: The set of observations used to compute Fréchet means.
