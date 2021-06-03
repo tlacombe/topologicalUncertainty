@@ -20,44 +20,47 @@ detect Out-of-Distribution samples and similar anomalies), but this code can be 
 **Note:** in the context of neural networks, current implementation only handles `tensorflow 2` sequential 
 networks and fully-connected layers (seen as bipartite graphs): 
 your (sequential) network can contain convolutional layers etc., but topological information is only extracted 
-from the folly-connected layers for now. 
-Further implementations (in particular with `Torch`) will come in the future.
+from the fully-connected layers for now. 
+Further implementations (in particular compatible with `Torch`) will come in the future.
 
 ## Get started
 
 ### Dependencies
 This code was developed and tested with Ubuntu 20.04 (it is likely that other versions/OS work as well) 
-and `Python 3.8` # (note: `tensorflow 2.4` is not compatible `Python 3.9`), 
+and `Python 3.8` # (note: it seems `tensorflow 2.4` is not compatible `Python 3.9`), 
 using the following python packages (stared packages are required, others are optional):
 
 - `numpy 1.20` *
 - `gudhi 3.3.0` *  (used to store activation graphs and compute MST/diagrams on top of them)
 - `tensorflow 2.4.1`
+- `matplotlib.pyplot 1.19.2`
 
-Note that `tensorflow` is only needed if you want to manipulate fully connected neural networks.
+Note that `tensorflow` is only needed if you want to manipulate fully connected neural networks. In the notebook, it is 
+only used in Section 2 (you should be able to run Section 1 without it.)
 
 ## Play with the tutorial
 
 We provide a tutorial to play quickly with these notions and see how you can use them for your own purpose. 
 It shows how you can get TU  
-- directly from a set of graphs saved as either `networkx.graphs`, `scipy.sparse` adjacency matrices or simply
-`numpy` adjacency matrices.
+- directly from a set of graphs saved 
+as `numpy` adjacency matrices. 
+  Extension to handle `networkx.graphs`, `scipy.sparse` adjacency matrices , will come in the future.
 - From a trained (`tensorflow`, sequential) neural network.
  
 
 Finally, an experiment (reproducing a result in the reference paper) using a network trained on the 
 `MUTAG` and `COX2` [datasets](www.graphlearning.io) is also provided 
 at the end of the notebook. 
-For the sake of simplicity, these datasets are provided in the `./datesets/` folder.
+For the sake of simplicity, these datasets are provided in the `./datesets/` folder,
+along with the features we used to incorporate graphs in neural networks.
 
 ### Notebook additional dependencies:
 
 Along with the aforementioned dependencies, the notebook makes use of the following packages:
-- `matplotlib.pyplot 1.19.2`
-- `pandas 1.1.3`  (used to store features computed from MUTAG and COX2)
+- `pandas 1.1.3`  (used to store features computed from MUTAG and COX2; section 2.2 only)
 
 
-### Run the notebook:
+### Use this code / Run the notebook:
 
 We suggest to use a fresh conda env. For this, you can start by typing in a terminal 
 

@@ -6,7 +6,10 @@
 import numpy as np
 import utils.utils_graphs as ug
 import gudhi as gd
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except:
+    ImportError('matplotlib not installed. Plot functions not available.')
 
 
 def diagram_from_simplex_tree(st, mode):
