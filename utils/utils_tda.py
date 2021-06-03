@@ -5,6 +5,7 @@
 
 import numpy as np
 import utils.utils_graphs as ug
+import gudhi as gd
 
 
 def dgm_per_layers_from_graphs(graphs_per_layers):
@@ -31,6 +32,24 @@ def diags_from_graphs(graphs):
     :return: list of list of persistence diagrams
     '''
     return [dgm_per_layers_from_graphs(gpl) for gpl in graphs]
+
+
+def diag_from_numpy_array(A):
+    '''
+    Turn a graph, encoded by its numpy adjacency matrix, into the corresponding persistence diagram.
+    We use the Rips filtration of negative weight values (then flip the diagram), so that it is equivalent to
+    superlevel set filtration.
+    :param A: A numpy adjacency matrix of size (n x n) representing a graph.
+    :return: A numpy arrau representing the corresponding persistence diagram (size n-1).
+    '''
+    n = A.shape[0]
+    assert np.min(A) >= 0  # Rips filtration only works with matrix with non-negative entries. TODO improve this.
+    rc = gd.RipsComplex(distance_matrix=-A)  # take negative values of A for superlevel set filtration
+    st = rc.create_simplex_tree(max_dimension=1)
+    st.compute_persistence(min_persistence=-1.)
+    dgm = st.persistence_intervals_in_dimension(0)[:, 1]
+    dgm = - dgm[np.where(np.isfinite(dgm))]
+    return dgm
 
 
 def wasserstein_barycenter_1D(u):
