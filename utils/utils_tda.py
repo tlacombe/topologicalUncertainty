@@ -6,6 +6,24 @@
 import numpy as np
 import utils.utils_graphs as ug
 import gudhi as gd
+import matplotlib.pyplot as plt
+
+
+def diagram_from_simplex_tree(st, mode):
+    '''
+    Given a gudhi.SimplexTree, compute the H0 persistence diagram and flip it. The intuition is that if we build the
+    SimplexTree using negative values, we actually return the superlevel sets PD.
+    We remove the infinite point(s) and only return the second coordinates, so that the returned PD is 1D.
+    :param st: gudhi.SimplexTree
+    :return: a one-dimensional diagram represented by a numpy.array.
+    '''
+    st.compute_persistence(min_persistence=-1.)
+    dgm = st.persistence_intervals_in_dimension(0)[:, 1]
+    if mode == "superlevel":
+        dgm = - dgm[np.where(np.isfinite(dgm))]
+    elif mode == "sublevel":
+        dgm = dgm[np.where(np.isfinite(dgm))]
+    return dgm
 
 
 def dgm_per_layers_from_graphs(graphs_per_layers):
@@ -20,9 +38,10 @@ def dgm_per_layers_from_graphs(graphs_per_layers):
     :return: list of persistence diagrams, represented as 1D numpy.array.
     '''
 
-    [G.compute_persistence(min_persistence=-1.) for G in graphs_per_layers]
-    dgms = [G.persistence_intervals_in_dimension(0)[:,1] for G in graphs_per_layers]
-    dgms = [- dgm[np.where(np.isfinite(dgm))] for dgm in dgms]
+    # [G.compute_persistence(min_persistence=-1.) for G in graphs_per_layers]
+    # dgms = [G.persistence_intervals_in_dimension(0)[:,1] for G in graphs_per_layers]
+    # dgms = [- dgm[np.where(np.isfinite(dgm))] for dgm in dgms]
+    dgms = [diagram_from_simplex_tree(G, mode="superlevel") for G in graphs_per_layers]
     return dgms
 
 
@@ -46,9 +65,19 @@ def diag_from_numpy_array(A):
     assert np.min(A) >= 0  # Rips filtration only works with matrix with non-negative entries. TODO improve this.
     rc = gd.RipsComplex(distance_matrix=-A)  # take negative values of A for superlevel set filtration
     st = rc.create_simplex_tree(max_dimension=1)
-    st.compute_persistence(min_persistence=-1.)
-    dgm = st.persistence_intervals_in_dimension(0)[:, 1]
-    dgm = - dgm[np.where(np.isfinite(dgm))]
+    dgm = diagram_from_simplex_tree(st, mode="superlevel")
+    return dgm
+
+
+def diag_from_point_cloud(X, mode="sublevel"):
+    '''
+    Given a point cloud, compute its H0-Rips (**minimum** spanning tree). Returns 1D diagram, without infinite points.
+    :param X: numpy.array of size (n x d).
+    :return: one dimensional PD of size (n-1).
+    '''
+    rc = gd.RipsComplex(points=X)
+    st = rc.create_simplex_tree(max_dimension=1)
+    dgm = diagram_from_simplex_tree(st, mode=mode)
     return dgm
 
 
@@ -142,3 +171,23 @@ def topological_uncertainty(model, x, all_barycenters,
         return res
     else:
         raise ValueError('aggregation=%s is not valid. Set it to mean (default) or max.' %aggregation)
+
+
+def plot_1d_diagram(dgm, ax=None, color='blue', xlim=None):
+    n = dgm.shape
+    m, M = np.min(dgm), np.max(dgm)
+    v = 0.1 * (M - m)
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.set_axis_off()
+    ax.plot((dgm,dgm), (np.zeros(n), 0.3 * np.ones(n)), color=color)
+    ax.plot(xlim, (0,0), color='black')
+    ax.set_xticks([m,M])
+    ax.set_xticklabels([m, M])
+    ax.scatter(dgm, 0.3 * np.ones(n), marker='x', color=color)
+    #ax.annotate(np.round(m,1), (m,0.35))
+    #ax.annotate(np.round(M,1), (M,0.35))
+    ax.set_ylim(0,1)
+    #ax.set_yticks([])
+    if xlim is not None:
+        ax.set_xlim(xlim)
