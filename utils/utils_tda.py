@@ -12,7 +12,7 @@ except:
     ImportError('matplotlib not installed. Plot functions not available.')
 
 
-def diagram_from_simplex_tree(st, mode):
+def diagram_from_simplex_tree(st, mode, dim=0):
     '''
     Given a gudhi.SimplexTree, compute the H0 persistence diagram and flip it. The intuition is that if we build the
     SimplexTree using negative values, we actually return the superlevel sets PD.
@@ -21,12 +21,16 @@ def diagram_from_simplex_tree(st, mode):
     :return: a one-dimensional diagram represented by a numpy.array.
     '''
     st.compute_persistence(min_persistence=-1.)
-    dgm = st.persistence_intervals_in_dimension(0)[:, 1]
+    dgm0 = st.persistence_intervals_in_dimension(0)[:, 1]
     if mode == "superlevel":
-        dgm = - dgm[np.where(np.isfinite(dgm))]
+        dgm0 = - dgm0[np.where(np.isfinite(dgm0))]
     elif mode == "sublevel":
-        dgm = dgm[np.where(np.isfinite(dgm))]
-    return dgm
+        dgm0 = dgm0[np.where(np.isfinite(dgm0))]
+    if dim==0:
+        return dgm0
+    elif dim==1:
+        dgm1 = st.persistence_intervals_in_dimension(1)[:,0]
+        return dgm0, dgm1
 
 
 def dgm_per_layers_from_graphs(graphs_per_layers):
@@ -56,7 +60,7 @@ def diags_from_graphs(graphs):
     return [dgm_per_layers_from_graphs(gpl) for gpl in graphs]
 
 
-def diag_from_numpy_array(A):
+def diag_from_numpy_array(A, dim=0):
     '''
     Turn a graph, encoded by its numpy adjacency matrix, into the corresponding persistence diagram.
     We use the Rips filtration of negative weight values (then flip the diagram), so that it is equivalent to
@@ -67,8 +71,13 @@ def diag_from_numpy_array(A):
     n = A.shape[0]
     assert np.min(A) >= 0  # Rips filtration only works with matrix with non-negative entries. TODO improve this.
     rc = gd.RipsComplex(distance_matrix=-A)  # take negative values of A for superlevel set filtration
-    st = rc.create_simplex_tree(max_dimension=1)
-    dgm = diagram_from_simplex_tree(st, mode="superlevel")
+    if dim == 0:
+        st = rc.create_simplex_tree(max_dimension=1)
+    elif dim == 1:
+        st = rc.create_simplex_tree(max_dimension=2)
+    else:
+        raise ValueError('dim = %s not allowed. dim must be 0 or 1.' %dim)
+    dgm = diagram_from_simplex_tree(st, mode="superlevel", dim=dim)
     return dgm
 
 
@@ -84,15 +93,20 @@ def diag_from_point_cloud(X, mode="sublevel"):
     return dgm
 
 
-def wasserstein_barycenter_1D(u):
+def wasserstein_barycenter_1D(u, p):
     '''
     Assume N array with the same number of points K, returns the naive 1D barycenter with support of size K
     '''
     s = np.sort(u)
-    return np.mean(s, axis=0)
+    if p==2:
+        return np.mean(s, axis=0)
+    elif p==1:
+        return np.median(s, axis=0)
+    else:
+        raise ValueError()
 
 
-def wasserstein_distance_1D(a, b, p=2., average=True):
+def wasserstein_distance_1D(a, b, p=2., average=True, thresh=None):
     '''
     Given two sets of points with the same cardinality, compute the 1D Wasserstein distance between them.
 
@@ -104,6 +118,10 @@ def wasserstein_distance_1D(a, b, p=2., average=True):
     '''
     n = a.shape[0]
     assert b.shape[0] == n
+
+    if thresh is not None:
+        a = a[:thresh]
+        b = b[:thresh]
 
     if np.isinf(p):
         res = np.max(np.abs(np.sort(a) - np.sort(b)))
