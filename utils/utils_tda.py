@@ -69,12 +69,20 @@ def diag_from_numpy_array(A, dim=0):
     :return: A numpy arrau representing the corresponding persistence diagram (size n-1).
     '''
     n = A.shape[0]
-    assert np.min(A) >= 0  # Rips filtration only works with matrix with non-negative entries. TODO improve this.
+    assert np.min(A) >= 0
     rc = gd.RipsComplex(distance_matrix=-A)  # take negative values of A for superlevel set filtration
     if dim == 0:
         st = rc.create_simplex_tree(max_dimension=1)
+        # must do this somewhat dirty trick to ensures the filtration to work properly (because of the negative entries
+        # in the matrix. 
+        for x in st.get_simplices():
+            if len(x[0]) == 1:
+                st.assign_filtration(x[0], -np.inf)
     elif dim == 1:
         st = rc.create_simplex_tree(max_dimension=2)
+        for x in st.get_simplices():
+            if len(x[0]) == 1:
+                st.assign_filtration(x[0], -np.inf)
     else:
         raise ValueError('dim = %s not allowed. dim must be 0 or 1.' %dim)
     dgm = diagram_from_simplex_tree(st, mode="superlevel", dim=dim)
@@ -93,7 +101,7 @@ def diag_from_point_cloud(X, mode="sublevel"):
     return dgm
 
 
-def wasserstein_barycenter_1D(u, p):
+def wasserstein_barycenter_1D(u, p=2):
     '''
     Assume N array with the same number of points K, returns the naive 1D barycenter with support of size K
     '''
