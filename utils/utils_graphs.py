@@ -63,6 +63,10 @@ def _simplex_tree_from_bipartite_matrix(W):
     '''
     G = gd.SimplexTree()
 
+    # We make sure the vertices are there "from the start" in the filtration. 
+    for i in np.arange(0, W.shape[0] + W.shape[1]):
+        G.insert([i], filtration=-np.inf)
+
     for i in np.arange(0, W.shape[0]):
         for j in np.arange(W.shape[0], W.shape[0] + W.shape[1]):
             G.insert([i, j], filtration= -np.abs(W[i, j - W.shape[0]]))
@@ -71,7 +75,7 @@ def _simplex_tree_from_bipartite_matrix(W):
 
 
 def build_graphs_from_adjacency_matrices(matrices):
-    raise NotImplemented('Diagrams from adjacency graphs will be provided in a future version.')
+    raise NotImplemented('Diagrams from adjacency matrices will be provided in a future version.')
 
 
 def build_graphs_from_deep_model(model, x_train, layers_id=None):
